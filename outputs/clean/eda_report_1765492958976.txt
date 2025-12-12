@@ -1,0 +1,213 @@
+The dataset consists of solar power generation data recorded at a 15-minute resolution over a span of 31 days, totaling 2,976 rows and 9 features after preprocessing. Notably, the dataset exhibits excellent data quality with no missing values, and a forward-fill followed by backward-fill interpolation method was applied to ensure continuity in numeric columns. Feature engineering was deemed unnecessary as the existing features provided sufficient relevance, with 5 out of 6 features showing a correlation greater than 0.3 with the target variable.
+
+In terms of forecasting performance, the neural network approach was recommended, with the Random Forest model achieving the best results among the traditional models, yielding a Mean Absolute Error (MAE) of 1.59, Root Mean Square Error (RMSE) of 4.39, and R² of 0.884. The Decision Tree model followed closely with an R² of 0.877 and MAE of 1.65, while the custom model generated through LLM-based code achieved an R² of 0.891, MAE of 1.78, and RMSE of 4.25, indicating a slight edge over the benchmarks. Visualizations produced include a power vs. time plot, a correlation matrix, a multi-model performance comparison, and a detailed performance analysis of the custom model.
+
+Next steps should involve a robust validation approach, such as cross-validation, to ensure the model's generalizability. Additionally, further model selection may be warranted to explore ensemble methods or advanced architectures that could enhance predictive performance. Limitations to address include potential overfitting, the need for more temporal features, and the model's sensitivity to extreme weather conditions.
+
+### MODEL TUNING RECOMMENDATIONS
+
+**RECOMMENDATION #1: Improve Peak-Hour Accuracy**
+
+**What You Observed:**
+- Scatter plot shows loose dots at high power levels (>30 kW).
+- Error spikes during peak hours (12-1 PM) by ±4 kW.
+
+**Root Cause:**
+- The model struggles with cloud variability and rapid changes during peak hours.
+
+**How to Fix It:**
+- Increase the number of decision trees and max depth to capture complex patterns.
+- Adjust learning rate for stability.
+
+**Technical Implementation:**
+```python
+# Current: n_estimators=300, max_depth=6, learning_rate=0.03
+# Suggested change:
+from xgboost import XGBRegressor
+
+model = XGBRegressor(
+    n_estimators=500,  # Increase from 300
+    max_depth=8,       # Increase from 6
+    learning_rate=0.02, # Decrease from 0.03 for stability
+    colsample_bytree=0.8,
+    objective='reg:squarederror',
+    n_jobs=-1
+)
+```
+
+**Expected Improvement:**
+- Could improve peak-hour accuracy from ±4 kW to ±2 kW.
+
+---
+
+**RECOMMENDATION #2: Reduce Systematic Bias**
+
+**What You Observed:**
+- Residual histogram is slightly right-skewed, indicating underprediction.
+
+**Root Cause:**
+- Model calibration issues leading to systematic underprediction.
+
+**How to Fix It:**
+- Adjust model calibration to center predictions around zero.
+
+**Technical Implementation:**
+```python
+# Adjust bias in predictions
+def adjust_bias(y_pred):
+    return y_pred + 0.25  # Adjust by observed mean error
+
+# Apply bias adjustment in pipeline
+model = Pipeline([
+    ('ensure_datetime', FunctionTransformer(ensure_datetime_index, validate=False)),
+    ('time_features', FunctionTransformer(add_time_features, validate=False)),
+    ('regressor', XGBRegressor(
+        learning_rate=0.02,
+        n_estimators=500,
+        max_depth=8,
+        colsample_bytree=0.8,
+        objective='reg:squarederror',
+        n_jobs=-1
+    )),
+    ('bias_adjustment', FunctionTransformer(adjust_bias, validate=False))
+])
+```
+
+**Expected Improvement:**
+- Could reduce systematic bias, improving accuracy by 1-2%.
+
+---
+
+**RECOMMENDATION #3: Capture Recent Trends**
+
+**What You Observed:**
+- Time-series plot shows repeating error patterns, indicating missing recent trend information.
+
+**Root Cause:**
+- Lack of recent history features to capture momentum.
+
+**How to Fix It:**
+- Add lag features to include recent power values.
+
+**Technical Implementation:**
+```python
+# Add lag features
+def add_lag_features(X):
+    X = X.copy()
+    X['lag_1'] = X['power'].shift(1)
+    X['lag_2'] = X['power'].shift(2)
+    return X
+
+# Update pipeline
+model = Pipeline([
+    ('ensure_datetime', FunctionTransformer(ensure_datetime_index, validate=False)),
+    ('time_features', FunctionTransformer(add_time_features, validate=False)),
+    ('lag_features', FunctionTransformer(add_lag_features, validate=False)),
+    ('regressor', XGBRegressor(
+        learning_rate=0.02,
+        n_estimators=500,
+        max_depth=8,
+        colsample_bytree=0.8,
+        objective='reg:squarederror',
+        n_jobs=-1
+    ))
+])
+```
+
+**Expected Improvement:**
+- Could reduce errors by 15-25% by capturing recent trends.
+
+---
+
+**RECOMMENDATION #4: Handle Weather Extremes**
+
+**What You Observed:**
+- Residual distribution has fat tails, indicating extreme prediction failures.
+
+**Root Cause:**
+- Model fails on unusual weather days due to lack of training on extreme conditions.
+
+**How to Fix It:**
+- Train the model explicitly on extreme weather scenarios.
+
+**Technical Implementation:**
+```python
+# Assuming extreme weather data is available
+extreme_weather_data = ...  # Load extreme weather dataset
+
+# Retrain model with additional data
+X_train_extended = pd.concat([X_train, extreme_weather_data])
+y_train_extended = pd.concat([y_train, extreme_weather_data['power']])
+
+model.fit(X_train_extended, y_train_extended)
+```
+
+**Expected Improvement:**
+- Could reduce worst-case errors from ±5 kW to ±3 kW.
+
+---
+
+**🎯 Prioritized Implementation Plan:**
+
+**Step 1: Improve Peak-Hour Accuracy**
+Expected improvement: ±2 kW error reduction
+```python
+from xgboost import XGBRegressor
+
+model = XGBRegressor(
+    n_estimators=500,
+    max_depth=8,
+    learning_rate=0.02,
+    colsample_bytree=0.8,
+    objective='reg:squarederror',
+    n_jobs=-1
+)
+```
+
+**Step 2: Reduce Systematic Bias**
+Expected improvement: 1-2% accuracy gain
+```python
+def adjust_bias(y_pred):
+    return y_pred + 0.25
+
+model = Pipeline([
+    ('ensure_datetime', FunctionTransformer(ensure_datetime_index, validate=False)),
+    ('time_features', FunctionTransformer(add_time_features, validate=False)),
+    ('regressor', XGBRegressor(
+        learning_rate=0.02,
+        n_estimators=500,
+        max_depth=8,
+        colsample_bytree=0.8,
+        objective='reg:squarederror',
+        n_jobs=-1
+    )),
+    ('bias_adjustment', FunctionTransformer(adjust_bias, validate=False))
+])
+```
+
+**Step 3: Capture Recent Trends**
+Expected improvement: 15-25% error reduction
+```python
+def add_lag_features(X):
+    X = X.copy()
+    X['lag_1'] = X['power'].shift(1)
+    X['lag_2'] = X['power'].shift(2)
+    return X
+
+model = Pipeline([
+    ('ensure_datetime', FunctionTransformer(ensure_datetime_index, validate=False)),
+    ('time_features', FunctionTransformer(add_time_features, validate=False)),
+    ('lag_features', FunctionTransformer(add_lag_features, validate=False)),
+    ('regressor', XGBRegressor(
+        learning_rate=0.02,
+        n_estimators=500,
+        max_depth=8,
+        colsample_bytree=0.8,
+        objective='reg:squarederror',
+        n_jobs=-1
+    ))
+])
+```
+
+**Combined Expected Improvement:** 
+Accuracy could improve from current 89.1% to estimated 94.1% (~5.6% relative improvement).

@@ -1,0 +1,156 @@
+---
+config:
+  flowchart:
+    curve: basis
+---
+graph TB
+    subgraph "User Interface (Frontend)"
+        UI[Web Browser]
+        Upload[Upload Data + Context]
+        BusinessObj[Business Objective Input]
+        Analyze[Run Analysis Button]
+        Feedback[Regenerate with Feedback]
+        ForecastUI[Forecast Section]
+        ForecastReq[Business Requirements]
+        ModelSelect[Model Selection]
+    end
+    
+    subgraph "API Layer"
+        Health["GET /api/health"]
+        AnalyzeAPI["POST /api/analyze"]
+        RegenerateAPI["POST /api/regenerate"]
+        ForecastAPI["POST /api/forecast"]
+    end
+    
+    subgraph "Main Workflow (LangGraph)"
+        Start([__start__])
+        Load[load]
+        Validate[validate]
+        Analyze2[analyze]
+        LLMValidate[llm_validate]
+        Preprocess[preprocess]
+        FeatureEng[feature_eng]
+        Visualize[visualize]
+        TsSuitable[ts_suitable]
+        TsTrain[ts_train]
+        TsVisualize[ts_visualize]
+        FinalReport[final_report]
+        End([__end__])
+        
+        subgraph "Reflection Loop"
+            CPPreprocess[cp_preprocess]
+            CPFeature[cp_feature]
+            CPForecast[cp_forecast]
+            ReflectData[reflect_data]
+            ReflectAnalysis[reflect_analysis]
+            ReflectForecast[reflect_forecast]
+        end
+        
+        subgraph "Quality Control"
+            Guardrail[guardrail]
+            ExportImages[export_images]
+            VisionAnalysis[vision_analysis]
+            VisionCheck[vision_check]
+        end
+    end
+    
+    subgraph "Business Context Processing"
+        BusinessContext[Business Objective]
+        DataContext[Data Context]
+        UserGoals[User Goals]
+    end
+    
+    subgraph "Forecast Generation (Separate Flow)"
+        ForecastInput[User Requirements]
+        ModelState[Trained Models]
+        ForecastLogic[Template-based Prediction]
+        LLMInsights[LLM Analysis]
+        ForecastOutput[Personalized Report]
+    end
+    
+    subgraph "Regeneration Flow"
+        UserFeedback[User Feedback]
+        ResumeSession[Resume from Checkpoint]
+        ImproveModel[Improve Custom Model]
+        RerunWorkflow[Re-execute from ts_train]
+    end
+    
+    %% User interactions
+    UI --> Upload
+    UI --> BusinessObj
+    UI --> Analyze
+    UI --> Feedback
+    UI --> ForecastUI
+    
+    Upload --> AnalyzeAPI
+    BusinessObj --> AnalyzeAPI
+    Analyze --> AnalyzeAPI
+    
+    Feedback --> RegenerateAPI
+    ForecastUI --> ForecastAPI
+    ForecastReq --> ForecastAPI
+    ModelSelect --> ForecastAPI
+    
+    %% API to workflow
+    AnalyzeAPI --> BusinessContext
+    AnalyzeAPI --> Start
+    
+    BusinessContext --> Load
+    DataContext --> Load
+    UserGoals --> Load
+    
+    %% Main workflow flow
+    Start --> Load
+    Load --> Validate
+    Validate --> Analyze2
+    Analyze2 --> LLMValidate
+    LLMValidate --> Preprocess
+    Preprocess --> CPPreprocess
+    CPPreprocess --> ReflectData
+    ReflectData --> FeatureEng
+    FeatureEng --> CPFeature
+    CPFeature --> ReflectAnalysis
+    ReflectAnalysis --> Visualize
+    Visualize --> TsSuitable
+    TsSuitable --> TsTrain
+    TsTrain --> TsVisualize
+    TsVisualize --> CPForecast
+    CPForecast --> ReflectForecast
+    ReflectForecast --> Guardrail
+    Guardrail --> ExportImages
+    ExportImages --> VisionAnalysis
+    VisionAnalysis --> VisionCheck
+    VisionCheck --> FinalReport
+    FinalReport --> End
+    
+    %% Regeneration flow
+    RegenerateAPI --> UserFeedback
+    UserFeedback --> ResumeSession
+    ResumeSession --> ImproveModel
+    ImproveModel --> RerunWorkflow
+    RerunWorkflow --> TsTrain
+    
+    %% Forecast flow
+    ForecastAPI --> ForecastInput
+    ForecastInput --> ModelState
+    End -.->|Saves Models| ModelState
+    ModelState --> ForecastLogic
+    ForecastLogic --> LLMInsights
+    LLMInsights --> ForecastOutput
+    ForecastOutput --> ForecastUI
+    
+    %% Results back to UI
+    End -.->|Results| AnalyzeAPI
+    AnalyzeAPI -.->|Response| UI
+    ForecastOutput -.->|Response| UI
+    
+    style UI fill:#e1f5ff
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style BusinessContext fill:#FFE4B5
+    style ForecastInput fill:#FFE4B5
+    style UserFeedback fill:#FFE4B5
+    style LLMInsights fill:#DDA0DD
+    style ReflectData fill:#FFD700
+    style ReflectAnalysis fill:#FFD700
+    style ReflectForecast fill:#FFD700

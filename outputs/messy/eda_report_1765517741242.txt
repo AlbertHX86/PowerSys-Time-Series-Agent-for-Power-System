@@ -1,0 +1,18 @@
+⚠️ **Data Quality Alert**
+
+Negative power output detected: min=-0.499 (renewable energy systems must have power output >= 0)
+
+**Issue:** The dataset contains negative power output values, which violates physical constraints for renewable energy systems. Solar and wind power generation must always be non-negative (≥ 0).
+
+**Possible Causes:**
+1. **Sensor calibration error:** Power sensors may need recalibration
+2. **Data processing error:** Sign flip or unit conversion mistake during data export
+3. **Incorrect column selection:** The target column may not represent actual power output
+
+**Recommended Actions:**
+1. Review and clean the raw data to remove or correct negative values
+2. Verify sensor calibration and data export procedures
+3. Confirm that the selected column represents actual power output (not delta/difference values)
+4. Re-upload the corrected dataset
+
+**Note:** Analysis cannot proceed with physically impossible data values. Please fix the data and try again.

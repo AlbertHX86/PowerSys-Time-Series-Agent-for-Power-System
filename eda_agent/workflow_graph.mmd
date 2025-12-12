@@ -1,0 +1,62 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	load(load)
+	validate(validate)
+	analyze(analyze)
+	llm_validate(llm_validate)
+	preprocess(preprocess)
+	feature_eng(feature_eng)
+	visualize(visualize)
+	ts_suitable(ts_suitable)
+	ts_train(ts_train)
+	ts_visualize(ts_visualize)
+	final_report(final_report)
+	cp_preprocess(cp_preprocess)
+	cp_feature(cp_feature)
+	cp_forecast(cp_forecast)
+	reflect_data(reflect_data)
+	reflect_analysis(reflect_analysis)
+	reflect_forecast(reflect_forecast)
+	guardrail(guardrail)
+	export_images(export_images)
+	vision_analysis(vision_analysis)
+	vision_check(vision_check)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> load;
+	analyze --> llm_validate;
+	cp_feature --> reflect_analysis;
+	cp_forecast --> reflect_forecast;
+	cp_preprocess --> reflect_data;
+	export_images --> vision_analysis;
+	feature_eng --> cp_feature;
+	guardrail --> export_images;
+	llm_validate -.-> final_report;
+	llm_validate -.-> preprocess;
+	load -.-> final_report;
+	load -.-> validate;
+	preprocess --> cp_preprocess;
+	reflect_analysis -.-> feature_eng;
+	reflect_analysis -.-> final_report;
+	reflect_analysis -.-> visualize;
+	reflect_data -.-> feature_eng;
+	reflect_data -.-> final_report;
+	reflect_data -.-> preprocess;
+	reflect_forecast --> guardrail;
+	ts_suitable --> ts_train;
+	ts_train --> ts_visualize;
+	ts_visualize --> cp_forecast;
+	validate -.-> analyze;
+	validate -.-> final_report;
+	vision_analysis --> vision_check;
+	vision_check -.-> final_report;
+	vision_check -.-> ts_train;
+	visualize --> ts_suitable;
+	final_report --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

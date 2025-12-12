@@ -1,0 +1,881 @@
+"""
+Time series forecasting tool with multiple models:
+- Random Forest
+- Decision Tree
+- XGBoost
+- Prophet
+"""
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+import base64
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from ..state import EDAState, memory_update
+
+# Import optional dependencies with fallback
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    print("Warning: XGBoost not installed. XGBoost model will be skipped.")
+
+try:
+    from prophet import Prophet
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+    print("Warning: Prophet not installed. Prophet model will be skipped.")
+
+
+def analyze_ts_suitability(state: EDAState) -> dict:
+    """Analyze if data is suitable for time series forecasting"""
+    step_name = "ts_suitable"
+    data_profile = state.get('data_profile', {})
+
+    timeseries_info = data_profile.get('timeseries', {})
+    time_column = timeseries_info.get('time_column')
+    timespan_days = timeseries_info.get('timespan_days', 0)
+    enough_history = timeseries_info.get('enough_history', False)
+
+    ts_analysis = {
+        'has_time_column': time_column is not None,
+        'timespan_days': timespan_days,
+        'enough_history': enough_history,
+        'suitable_for_neural_network': False,
+        'suitable_for_statistical': False,
+        'recommended_method': None,
+        'prerequisites_met': True,
+        'method_rationale': ''
+    }
+
+    if not time_column:
+        ts_analysis['prerequisites_met'] = False
+        ts_analysis['method_rationale'] = 'No time column detected. Cannot perform time series forecasting. Consider regression models instead.'
+        ts_analysis['recommended_method'] = 'regression'
+        out = {
+            'ts_suitable': False,
+            'ts_method': 'regression',
+            'ts_analysis': ts_analysis
+        }
+        out.update(
+            memory_update(
+                step_name,
+                'TS suitability: no time column -> regression',
+                warnings=['No time column']
+            )
+        )
+        return out
+
+    if timespan_days >= 30 and enough_history:
+        ts_analysis['suitable_for_neural_network'] = True
+        ts_analysis['suitable_for_statistical'] = True
+        ts_analysis['recommended_method'] = 'neural_network'
+        ts_analysis['method_rationale'] = f'Sufficient historical data ({timespan_days:.1f} days). Neural networks recommended.'
+    elif timespan_days >= 7:
+        ts_analysis['suitable_for_neural_network'] = False
+        ts_analysis['suitable_for_statistical'] = True
+        ts_analysis['recommended_method'] = 'statistical'
+        ts_analysis['method_rationale'] = f'Limited data ({timespan_days:.1f} days). Statistical methods recommended.'
+    else:
+        ts_analysis['prerequisites_met'] = False
+        ts_analysis['recommended_method'] = 'baseline'
+        ts_analysis['method_rationale'] = f'Insufficient historical data ({timespan_days:.1f} days). Only baseline methods feasible.'
+
+    out = {
+        'ts_suitable': ts_analysis['suitable_for_neural_network'] or ts_analysis['suitable_for_statistical'],
+        'ts_method': ts_analysis['recommended_method'],
+        'ts_analysis': ts_analysis
+    }
+    
+    msg = f"TS suitability: method={ts_analysis['recommended_method']} span={timespan_days:.1f}d suitable={out['ts_suitable']}"
+    out.update(
+        memory_update(
+            step_name,
+            msg,
+            warnings=[] if out['ts_suitable'] else ["Limited/insufficient timespan"]
+        )
+    )
+    return out
+
+
+def train_forecast_models(state: EDAState) -> dict:
+    """
+    Train multiple forecast models:
+    - Random Forest (baseline ensemble)
+    - Decision Tree (baseline simple)
+    - XGBoost (gradient boosting, if available)
+    - Prophet (time series specialized, if available)
+    """
+    step_name = "ts_train"
+    engineered_data = state.get('engineered_data')
+    target_col = state.get('target_column', 'Power MW')
+    
+    if engineered_data is None or engineered_data.empty:
+        out = {'forecast_results': None, 'model_state': None, 'target_column': target_col}
+        out.update(
+            memory_update(
+                step_name,
+                "Training skipped: no engineered data",
+                warnings=["No data for training"],
+                needs_revision=True
+            )
+        )
+        return out
+
+    # Prepare features and target
+    feature_cols = [
+        col for col in engineered_data.columns 
+        if col != target_col and not col.startswith('_') 
+        and engineered_data[col].dtype in ['float64', 'float32', 'int64', 'int32']
+    ]
+    X = engineered_data[feature_cols].values
+    y = engineered_data[target_col].values
+
+    # Time-based train/test split (last 1 day as test)
+    split_point = len(X)
+    test_size = 0
+    timestamps = None
+    
+    if '_parsed_time' in engineered_data.columns:
+        timestamps = engineered_data['_parsed_time'].values
+        last_timestamp = pd.Timestamp(timestamps[-1])
+        cutoff_timestamp = last_timestamp - pd.Timedelta(days=1)
+        for i in range(len(timestamps)):
+            if pd.Timestamp(timestamps[i]) >= cutoff_timestamp:
+                split_point = i
+                break
+        test_size = len(X) - split_point
+    else:
+        test_size = max(1, int(len(X) * 0.05))
+        split_point = len(X) - test_size
+
+    X_train, X_test = X[:split_point], X[split_point:]
+    y_train, y_test = y[:split_point], y[split_point:]
+    
+    # Handle NaN and inf values
+    X_train = X_train.astype(float)
+    X_test = X_test.astype(float)
+    X_train[np.isinf(X_train)] = np.nan
+    X_test[np.isinf(X_test)] = np.nan
+    
+    train_mean = np.nanmean(X_train, axis=0)
+    for i in range(X_train.shape[1]):
+        nan_mask = np.isnan(X_train[:, i])
+        X_train[nan_mask, i] = train_mean[i]
+        nan_mask_test = np.isnan(X_test[:, i])
+        X_test[nan_mask_test, i] = train_mean[i]
+
+    forecast_results = {
+        'target_column': target_col,
+        'test_size': test_size,
+        'split_point': split_point,
+        'methods': {}
+    }
+    
+    model_state = {
+        'y_test': y_test,
+        'y_train': y_train,
+        'split_point': split_point,
+        'test_size': test_size,
+        'predictions': {},
+        'metrics': {}
+    }
+
+    # ========================================================================
+    # Model 1: Random Forest
+    # ========================================================================
+    try:
+        rf_model = RandomForestRegressor(n_estimators=100, max_depth=15, random_state=42)
+        rf_model.fit(X_train, y_train)
+        rf_pred = rf_model.predict(X_test)
+        rf_mae = mean_absolute_error(y_test, rf_pred)
+        rf_rmse = np.sqrt(mean_squared_error(y_test, rf_pred))
+        rf_r2 = r2_score(y_test, rf_pred)
+
+        forecast_results['methods']['random_forest'] = {
+            'method': 'Random Forest Regressor',
+            'description': 'Ensemble method capturing non-linear relationships and feature interactions',
+            'model': 'random_forest',
+            'metrics': {
+                'MAE': float(rf_mae),
+                'RMSE': float(rf_rmse),
+                'R2': float(rf_r2),
+                'test_size': len(y_test)
+            },
+            'parameters': {'n_estimators': 100, 'max_depth': 15, 'random_state': 42}
+        }
+        
+        model_state['predictions']['rf'] = rf_pred
+        model_state['metrics']['rf'] = {'mae': rf_mae, 'rmse': rf_rmse, 'r2': rf_r2}
+        model_state['rf_pred'] = rf_pred
+        model_state['rf_mae'] = rf_mae
+        model_state['rf_rmse'] = rf_rmse
+        model_state['rf_r2'] = rf_r2
+    except Exception as e:
+        print(f"Random Forest training failed: {e}")
+
+    # ========================================================================
+    # Model 2: Decision Tree
+    # ========================================================================
+    try:
+        dt_model = DecisionTreeRegressor(max_depth=15, random_state=42)
+        dt_model.fit(X_train, y_train)
+        dt_pred = dt_model.predict(X_test)
+        dt_mae = mean_absolute_error(y_test, dt_pred)
+        dt_rmse = np.sqrt(mean_squared_error(y_test, dt_pred))
+        dt_r2 = r2_score(y_test, dt_pred)
+
+        forecast_results['methods']['decision_tree'] = {
+            'method': 'Decision Tree Regressor',
+            'description': 'Single decision tree capturing hierarchical feature relationships',
+            'model': 'decision_tree',
+            'metrics': {
+                'MAE': float(dt_mae),
+                'RMSE': float(dt_rmse),
+                'R2': float(dt_r2),
+                'test_size': len(y_test)
+            },
+            'parameters': {'max_depth': 15, 'random_state': 42}
+        }
+        
+        model_state['predictions']['dt'] = dt_pred
+        model_state['metrics']['dt'] = {'mae': dt_mae, 'rmse': dt_rmse, 'r2': dt_r2}
+        model_state['dt_pred'] = dt_pred
+        model_state['dt_mae'] = dt_mae
+        model_state['dt_rmse'] = dt_rmse
+        model_state['dt_r2'] = dt_r2
+    except Exception as e:
+        print(f"Decision Tree training failed: {e}")
+
+    # ========================================================================
+    # Model 3: XGBoost
+    # ========================================================================
+    if XGBOOST_AVAILABLE:
+        try:
+            xgb_model = xgb.XGBRegressor(
+                n_estimators=100,
+                max_depth=7,
+                learning_rate=0.1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                objective='reg:squarederror'
+            )
+            xgb_model.fit(X_train, y_train, verbose=False)
+            xgb_pred = xgb_model.predict(X_test)
+            xgb_mae = mean_absolute_error(y_test, xgb_pred)
+            xgb_rmse = np.sqrt(mean_squared_error(y_test, xgb_pred))
+            xgb_r2 = r2_score(y_test, xgb_pred)
+
+            forecast_results['methods']['xgboost'] = {
+                'method': 'XGBoost Regressor',
+                'description': 'Gradient boosting with regularization for robust predictions',
+                'model': 'xgboost',
+                'metrics': {
+                    'MAE': float(xgb_mae),
+                    'RMSE': float(xgb_rmse),
+                    'R2': float(xgb_r2),
+                    'test_size': len(y_test)
+                },
+                'parameters': {
+                    'n_estimators': 100,
+                    'max_depth': 7,
+                    'learning_rate': 0.1,
+                    'subsample': 0.8,
+                    'colsample_bytree': 0.8
+                }
+            }
+            
+            model_state['predictions']['xgb'] = xgb_pred
+            model_state['metrics']['xgb'] = {'mae': xgb_mae, 'rmse': xgb_rmse, 'r2': xgb_r2}
+            model_state['xgb_pred'] = xgb_pred
+            model_state['xgb_mae'] = xgb_mae
+            model_state['xgb_rmse'] = xgb_rmse
+            model_state['xgb_r2'] = xgb_r2
+        except Exception as e:
+            print(f"XGBoost training failed: {e}")
+
+    # ========================================================================
+    # Model 4: Prophet (time series specialized)
+    # ========================================================================
+    if PROPHET_AVAILABLE and timestamps is not None:
+        try:
+            # Prepare Prophet dataframe (requires 'ds' and 'y' columns)
+            train_df = pd.DataFrame({
+                'ds': pd.to_datetime(timestamps[:split_point]),
+                'y': y_train
+            })
+            test_df = pd.DataFrame({
+                'ds': pd.to_datetime(timestamps[split_point:split_point + test_size])
+            })
+            
+            # Train Prophet model (suppress logging)
+            prophet_model = Prophet(
+                daily_seasonality=True,
+                weekly_seasonality=True,
+                yearly_seasonality=False,
+                changepoint_prior_scale=0.05,
+                seasonality_mode='additive'
+            )
+            
+            # Suppress Prophet's verbose output
+            import logging
+            logging.getLogger('prophet').setLevel(logging.ERROR)
+            
+            prophet_model.fit(train_df)
+            prophet_forecast = prophet_model.predict(test_df)
+            prophet_pred = prophet_forecast['yhat'].values
+            
+            # Handle prediction length mismatch
+            if len(prophet_pred) > len(y_test):
+                prophet_pred = prophet_pred[:len(y_test)]
+            elif len(prophet_pred) < len(y_test):
+                prophet_pred = np.pad(prophet_pred, (0, len(y_test) - len(prophet_pred)), 
+                                     mode='edge')
+            
+            prophet_mae = mean_absolute_error(y_test, prophet_pred)
+            prophet_rmse = np.sqrt(mean_squared_error(y_test, prophet_pred))
+            prophet_r2 = r2_score(y_test, prophet_pred)
+
+            forecast_results['methods']['prophet'] = {
+                'method': 'Facebook Prophet',
+                'description': 'Time series forecasting with trend and seasonality decomposition',
+                'model': 'prophet',
+                'metrics': {
+                    'MAE': float(prophet_mae),
+                    'RMSE': float(prophet_rmse),
+                    'R2': float(prophet_r2),
+                    'test_size': len(y_test)
+                },
+                'parameters': {
+                    'daily_seasonality': True,
+                    'weekly_seasonality': True,
+                    'changepoint_prior_scale': 0.05,
+                    'seasonality_mode': 'additive'
+                }
+            }
+            
+            model_state['predictions']['prophet'] = prophet_pred
+            model_state['metrics']['prophet'] = {'mae': prophet_mae, 'rmse': prophet_rmse, 'r2': prophet_r2}
+            model_state['prophet_pred'] = prophet_pred
+            model_state['prophet_mae'] = prophet_mae
+            model_state['prophet_rmse'] = prophet_rmse
+            model_state['prophet_r2'] = prophet_r2
+        except Exception as e:
+            print(f"Prophet training failed: {e}")
+
+    out = {
+        'forecast_results': forecast_results,
+        'model_state': model_state,
+        'target_column': target_col,
+        'ts_analysis': state.get('ts_analysis'),
+        'ts_method': state.get('ts_method'),
+        'ts_suitable': state.get('ts_suitable'),
+        'data_profile': state.get('data_profile'),
+        'summary_stats': state.get('summary_stats'),
+        'engineered_data': engineered_data,
+        'visualizations': state.get('visualizations'),
+        'viz_images': state.get('viz_images'),
+        'forecast_images': {}
+    }
+    
+    # Build summary message
+    trained_models = list(forecast_results['methods'].keys())
+    summary_parts = []
+    for model_name in trained_models:
+        metrics = forecast_results['methods'][model_name]['metrics']
+        summary_parts.append(f"{model_name.upper()} R²={metrics['R2']:.3f} MAE={metrics['MAE']:.3f}")
+    
+    msg = f"Training complete ({len(trained_models)} models): " + "; ".join(summary_parts)
+    
+    # Check for poor performance
+    poor_performance = any(
+        model_state['metrics'][m]['r2'] < 0 
+        for m in model_state['metrics'] if 'r2' in model_state['metrics'][m]
+    )
+    
+    out.update(
+        memory_update(
+            step_name,
+            msg,
+            warnings=["Some models have low R²"] if poor_performance else []
+        )
+    )
+    return out
+
+
+def visualize_forecast(state: EDAState) -> dict:
+    """Generate forecast visualization comparing actual vs predicted values for all models"""
+    step_name = "ts_visualize"
+    model_state = state.get('model_state')
+    forecast_results = state.get('forecast_results', {})
+    target_col = state.get('target_column')
+    forecast_images = {}
+
+    if model_state is None:
+        out = {
+            'forecast_images': {},
+            'forecast_results': forecast_results,
+            'target_column': target_col,
+            'ts_analysis': state.get('ts_analysis'),
+            'ts_method': state.get('ts_method'),
+            'ts_suitable': state.get('ts_suitable'),
+            'data_profile': state.get('data_profile'),
+            'summary_stats': state.get('summary_stats'),
+            'engineered_data': state.get('engineered_data'),
+            'visualizations': state.get('visualizations'),
+            'viz_images': state.get('viz_images')
+        }
+        out.update(
+            memory_update(
+                step_name,
+                "Forecast visualization skipped: no model state",
+                warnings=["No model state"]
+            )
+        )
+        return out
+
+    try:
+        y_test = model_state['y_test']
+        y_train = model_state['y_train']
+        split_point = model_state['split_point']
+        test_size = model_state['test_size']
+        
+        # Collect all available model predictions
+        predictions = model_state.get('predictions', {})
+        metrics = model_state.get('metrics', {})
+
+        fig, ax = plt.subplots(figsize=(18, 7))
+        
+        engineered_data = state.get('engineered_data')
+        data_profile = state.get('data_profile', {})
+        timeseries_info = data_profile.get('timeseries', {})
+        time_column = timeseries_info.get('time_column')
+
+        all_timestamps = None
+        if engineered_data is not None and '_parsed_time' in engineered_data.columns and time_column:
+            all_timestamps = engineered_data['_parsed_time'].values
+
+        # Display only last 200 points for clarity
+        display_points = 200
+        total_available = len(y_train) + len(y_test)
+        
+        if total_available <= display_points:
+            train_display_start = 0
+            train_display_end = len(y_train)
+        else:
+            points_to_skip = total_available - display_points
+            if points_to_skip >= len(y_train):
+                train_display_start = len(y_train)
+                train_display_end = len(y_train)
+            else:
+                train_display_start = len(y_train) - (display_points - len(y_test))
+                train_display_end = len(y_train)
+
+        train_y_display = y_train[train_display_start:train_display_end]
+        
+        # Color scheme for models
+        colors = {
+            'rf': '#00B894',      # Green
+            'dt': '#FF6B6B',      # Red
+            'xgb': '#6C5CE7',     # Purple
+            'prophet': '#FDCB6E'  # Yellow/Gold
+        }
+        markers = {
+            'rf': 's',   # Square
+            'dt': '^',   # Triangle up
+            'xgb': 'D',  # Diamond
+            'prophet': 'o'  # Circle
+        }
+        
+        if all_timestamps is not None:
+            train_timestamps_display = all_timestamps[train_display_start:train_display_end]
+            test_timestamps_display = all_timestamps[split_point:split_point + test_size]
+            
+            # Plot training data
+            if len(train_y_display) > 0:
+                ax.plot(
+                    train_timestamps_display,
+                    train_y_display,
+                    'o-',
+                    linewidth=2,
+                    markersize=3,
+                    label='Training Data',
+                    color='#95B8D1',
+                    alpha=0.5,
+                    zorder=2
+                )
+            
+            # Plot actual test values
+            ax.plot(
+                test_timestamps_display,
+                y_test,
+                'o-',
+                linewidth=3,
+                markersize=7,
+                label='Actual Test Values',
+                color='#2E86AB',
+                alpha=0.95,
+                zorder=5
+            )
+            
+            # Plot each model's predictions
+            zorder_counter = 3
+            for model_key, pred in predictions.items():
+                if model_key in metrics:
+                    m = metrics[model_key]
+                    label = f"{model_key.upper()}: MAE={m['mae']:.2f} RMSE={m['rmse']:.2f} R²={m['r2']:.3f}"
+                    ax.plot(
+                        test_timestamps_display,
+                        pred,
+                        marker=markers.get(model_key, 'x'),
+                        linestyle='--',
+                        linewidth=2.5,
+                        markersize=5,
+                        label=label,
+                        color=colors.get(model_key, '#74B9FF'),
+                        alpha=0.85,
+                        zorder=zorder_counter
+                    )
+                    zorder_counter += 1
+            
+            # Split line
+            if len(test_timestamps_display) > 0:
+                split_time = pd.Timestamp(test_timestamps_display[0])
+                ax.axvline(
+                    x=split_time,
+                    color='red',
+                    linestyle='--',
+                    linewidth=2,
+                    alpha=0.4,
+                    label='Train/Test Split',
+                    zorder=1
+                )
+            
+            ax.set_xlabel('Time', fontsize=14, fontweight='bold')
+            plt.xticks(rotation=45, ha='right')
+        else:
+            # Index-based plotting
+            if len(train_y_display) > 0:
+                train_x_indices = np.arange(train_display_start, train_display_end)
+                ax.plot(
+                    train_x_indices,
+                    train_y_display,
+                    'o-',
+                    linewidth=2,
+                    markersize=3,
+                    label='Training Data',
+                    color='#95B8D1',
+                    alpha=0.5,
+                    zorder=2
+                )
+            
+            test_x_indices = np.arange(train_display_end, train_display_end + len(y_test))
+            
+            ax.plot(test_x_indices, y_test, 'o-', linewidth=3, markersize=7,
+                   label='Actual Test Values', color='#2E86AB', alpha=0.95, zorder=5)
+            
+            zorder_counter = 3
+            for model_key, pred in predictions.items():
+                if model_key in metrics:
+                    m = metrics[model_key]
+                    label = f"{model_key.upper()}: MAE={m['mae']:.2f} RMSE={m['rmse']:.2f} R²={m['r2']:.3f}"
+                    ax.plot(
+                        test_x_indices,
+                        pred,
+                        marker=markers.get(model_key, 'x'),
+                        linestyle='--',
+                        linewidth=2.5,
+                        markersize=5,
+                        label=label,
+                        color=colors.get(model_key, '#74B9FF'),
+                        alpha=0.85,
+                        zorder=zorder_counter
+                    )
+                    zorder_counter += 1
+            
+            ax.axvline(x=train_display_end, color='red', linestyle='--',
+                      linewidth=2, alpha=0.4, label='Train/Test Split', zorder=1)
+            ax.set_xlabel('Sample Index', fontsize=14, fontweight='bold')
+
+        ax.set_ylabel('Power Generation (MW)', fontsize=14, fontweight='bold')
+        ax.set_title(f'Figure 3: Forecast Performance - {len(predictions)} Models Comparison', 
+                    fontsize=16, fontweight='bold', pad=20)
+        ax.legend(loc='best', fontsize=9, framealpha=0.95, ncol=2)
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+        ax.set_facecolor('#F8F9FA')
+        fig.patch.set_facecolor('white')
+        plt.tight_layout()
+        
+        # Save to base64
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        forecast_img_base64 = base64.b64encode(buf.read()).decode()
+        buf.close()
+        plt.close(fig)
+        
+        forecast_images['test_performance'] = forecast_img_base64
+        
+    except Exception as e:
+        return_dict = {
+            'forecast_images': forecast_images,
+            'forecast_results': forecast_results,
+            'target_column': target_col,
+            'ts_analysis': state.get('ts_analysis'),
+            'ts_method': state.get('ts_method'),
+            'ts_suitable': state.get('ts_suitable'),
+            'data_profile': state.get('data_profile'),
+            'summary_stats': state.get('summary_stats'),
+            'engineered_data': state.get('engineered_data'),
+            'visualizations': state.get('visualizations'),
+            'viz_images': state.get('viz_images')
+        }
+        return_dict.update(
+            memory_update(
+                step_name,
+                f"Forecast visualization failed: {str(e)}",
+                errors=state.get("errors", []) + [str(e)],
+                needs_revision=True
+            )
+        )
+        return return_dict
+
+    out = {
+        'forecast_images': forecast_images,
+        'forecast_results': forecast_results,
+        'target_column': target_col,
+        'ts_analysis': state.get('ts_analysis'),
+        'ts_method': state.get('ts_method'),
+        'ts_suitable': state.get('ts_suitable'),
+        'data_profile': state.get('data_profile'),
+        'summary_stats': state.get('summary_stats'),
+        'engineered_data': state.get('engineered_data'),
+        'visualizations': state.get('visualizations'),
+        'viz_images': state.get('viz_images')
+    }
+    
+    msg = f"Forecast visualization complete: {len(predictions)} models plotted, {len(forecast_images)} images"
+    out.update(memory_update(step_name, msg))
+    return out
+        out = {
+            'forecast_images': {},
+            'forecast_results': forecast_results,
+            'target_column': target_col,
+            'ts_analysis': state.get('ts_analysis'),
+            'ts_method': state.get('ts_method'),
+            'ts_suitable': state.get('ts_suitable'),
+            'data_profile': state.get('data_profile'),
+            'summary_stats': state.get('summary_stats'),
+            'engineered_data': state.get('engineered_data'),
+            'visualizations': state.get('visualizations'),
+            'viz_images': state.get('viz_images')
+        }
+        out.update(
+            memory_update(
+                step_name,
+                "Forecast visualization skipped: no model state",
+                warnings=["No model state"]
+            )
+        )
+        return out
+
+    try:
+        y_test = model_state['y_test']
+        rf_pred = model_state['rf_pred']
+        dt_pred = model_state['dt_pred']
+        y_train = model_state['y_train']
+        split_point = model_state['split_point']
+        test_size = model_state['test_size']
+        rf_mae = model_state['rf_mae']
+        rf_rmse = model_state['rf_rmse']
+        rf_r2 = model_state['rf_r2']
+        dt_mae = model_state['dt_mae']
+        dt_rmse = model_state['dt_rmse']
+        dt_r2 = model_state['dt_r2']
+
+        fig, ax = plt.subplots(figsize=(16, 6))
+        
+        engineered_data = state.get('engineered_data')
+        data_profile = state.get('data_profile', {})
+        timeseries_info = data_profile.get('timeseries', {})
+        time_column = timeseries_info.get('time_column')
+
+        all_timestamps = None
+        if engineered_data is not None and '_parsed_time' in engineered_data.columns and time_column:
+            all_timestamps = engineered_data['_parsed_time'].values
+
+        # Display only last 200 points for clarity
+        display_points = 200
+        total_available = len(y_train) + len(y_test)
+        
+        if total_available <= display_points:
+            train_display_start = 0
+            train_display_end = len(y_train)
+        else:
+            points_to_skip = total_available - display_points
+            if points_to_skip >= len(y_train):
+                train_display_start = len(y_train)
+                train_display_end = len(y_train)
+            else:
+                train_display_start = len(y_train) - (display_points - len(y_test))
+                train_display_end = len(y_train)
+
+        train_y_display = y_train[train_display_start:train_display_end]
+        
+        if all_timestamps is not None:
+            train_timestamps_display = all_timestamps[train_display_start:train_display_end]
+            test_timestamps_display = all_timestamps[split_point:split_point + test_size]
+            
+            if len(train_y_display) > 0:
+                ax.plot(
+                    train_timestamps_display,
+                    train_y_display,
+                    'o-',
+                    linewidth=2,
+                    markersize=4,
+                    label='Training Data',
+                    color='#95B8D1',
+                    alpha=0.6,
+                    zorder=2
+                )
+            
+            ax.plot(
+                test_timestamps_display,
+                y_test,
+                'o-',
+                linewidth=2.5,
+                markersize=6,
+                label='Actual Test Values',
+                color='#2E86AB',
+                alpha=0.9,
+                zorder=4
+            )
+            ax.plot(
+                test_timestamps_display,
+                rf_pred,
+                's--',
+                linewidth=2.5,
+                markersize=5,
+                label=f'RF MAE:{rf_mae:.3f} RMSE:{rf_rmse:.3f} R²:{rf_r2:.3f}',
+                color='#00B894',
+                alpha=0.85,
+                zorder=3
+            )
+            ax.plot(
+                test_timestamps_display,
+                dt_pred,
+                '^--',
+                linewidth=2.5,
+                markersize=5,
+                label=f'DT MAE:{dt_mae:.3f} RMSE:{dt_rmse:.3f} R²:{dt_r2:.3f}',
+                color='#FF6B6B',
+                alpha=0.85,
+                zorder=3
+            )
+            
+            if len(test_timestamps_display) > 0:
+                split_time = pd.Timestamp(test_timestamps_display[0])
+                ax.axvline(
+                    x=split_time,
+                    color='red',
+                    linestyle='--',
+                    linewidth=2,
+                    alpha=0.5,
+                    label='Train/Test Split',
+                    zorder=1
+                )
+            
+            ax.set_xlabel('Time', fontsize=13, fontweight='bold')
+            plt.xticks(rotation=45, ha='right')
+        else:
+            if len(train_y_display) > 0:
+                train_x_indices = np.arange(train_display_start, train_display_end)
+                ax.plot(
+                    train_x_indices,
+                    train_y_display,
+                    'o-',
+                    linewidth=2,
+                    markersize=4,
+                    label='Training Data',
+                    color='#95B8D1',
+                    alpha=0.6,
+                    zorder=2
+                )
+            
+            test_x_indices = np.arange(train_display_end, train_display_end + len(y_test))
+            ax.plot(test_x_indices, y_test, 'o-', linewidth=2.5, markersize=6,
+                   label='Actual Test Values', color='#2E86AB', alpha=0.9, zorder=4)
+            ax.plot(test_x_indices, rf_pred, 's--', linewidth=2.5, markersize=5,
+                   label=f'RF MAE:{rf_mae:.3f} RMSE:{rf_rmse:.3f} R²:{rf_r2:.3f}',
+                   color='#00B894', alpha=0.85, zorder=3)
+            ax.plot(test_x_indices, dt_pred, '^--', linewidth=2.5, markersize=5,
+                   label=f'DT MAE:{dt_mae:.3f} RMSE:{dt_rmse:.3f} R²:{dt_r2:.3f}',
+                   color='#FF6B6B', alpha=0.85, zorder=3)
+            ax.axvline(x=train_display_end, color='red', linestyle='--',
+                      linewidth=2, alpha=0.5, label='Train/Test Split', zorder=1)
+            ax.set_xlabel('Sample Index', fontsize=13, fontweight='bold')
+
+        ax.set_ylabel('Power Generation (MW)', fontsize=13, fontweight='bold')
+        ax.set_title('Figure 3: Forecast Performance Plot', fontsize=15, fontweight='bold', pad=20)
+        ax.legend(loc='best', fontsize=9, framealpha=0.95, ncol=2)
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+        ax.set_facecolor('#F8F9FA')
+        fig.patch.set_facecolor('white')
+        plt.tight_layout()
+        
+        # Save to base64
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        forecast_img_base64 = base64.b64encode(buf.read()).decode()
+        buf.close()
+        plt.close(fig)
+        
+        forecast_images['test_performance'] = forecast_img_base64
+        
+    except Exception as e:
+        return_dict = {
+            'forecast_images': forecast_images,
+            'forecast_results': forecast_results,
+            'target_column': target_col,
+            'ts_analysis': state.get('ts_analysis'),
+            'ts_method': state.get('ts_method'),
+            'ts_suitable': state.get('ts_suitable'),
+            'data_profile': state.get('data_profile'),
+            'summary_stats': state.get('summary_stats'),
+            'engineered_data': state.get('engineered_data'),
+            'visualizations': state.get('visualizations'),
+            'viz_images': state.get('viz_images')
+        }
+        return_dict.update(
+            memory_update(
+                step_name,
+                f"Forecast visualization failed: {str(e)}",
+                errors=state.get("errors", []) + [str(e)],
+                needs_revision=True
+            )
+        )
+        return return_dict
+
+    out = {
+        'forecast_images': forecast_images,
+        'forecast_results': forecast_results,
+        'target_column': target_col,
+        'ts_analysis': state.get('ts_analysis'),
+        'ts_method': state.get('ts_method'),
+        'ts_suitable': state.get('ts_suitable'),
+        'data_profile': state.get('data_profile'),
+        'summary_stats': state.get('summary_stats'),
+        'engineered_data': state.get('engineered_data'),
+        'visualizations': state.get('visualizations'),
+        'viz_images': state.get('viz_images')
+    }
+    
+    msg = f"Forecast visualization complete: images={len(forecast_images)}"
+    out.update(memory_update(step_name, msg))
+    return out

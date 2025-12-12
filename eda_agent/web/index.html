@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerSys - AI-Powered Time Series Analysis</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <h1>PowerSys</h1>
+                </div>
+                <nav class="nav">
+                    <a href="#upload" class="nav-link active">Analysis</a>
+                    <a href="#history" class="nav-link">History</a>
+                    <a href="#docs" class="nav-link">Docs</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <h2 class="hero-title">AI-Powered Time Series Analysis & Forecasting</h2>
+                <p class="hero-subtitle">Upload your data, generate custom ML models with natural language, and get actionable insights in minutes.</p>
+            </section>
+
+            <!-- Workflow Steps -->
+            <div class="workflow-steps">
+                <div class="step completed" id="step-upload">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Upload Data</h3>
+                        <p>CSV, Excel, or TXT</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step" id="step-configure">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Configure</h3>
+                        <p>Set parameters</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step" id="step-model">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Custom Model</h3>
+                        <p>Optional AI generation</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step" id="step-results">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Results</h3>
+                        <p>Review & iterate</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Grid Layout -->
+            <div class="main-grid">
+                <!-- Left Panel: Upload & Configuration -->
+                <div class="panel panel-left">
+                    <!-- File Upload Section -->
+                    <div class="section">
+                        <h3 class="section-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            Upload Dataset
+                        </h3>
+                        
+                        <div class="upload-area" id="upload-area">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                            </svg>
+                            <p class="upload-text">Drag & drop your file here</p>
+                            <p class="upload-subtext">or</p>
+                            <button class="btn btn-secondary" id="browse-btn">Browse Files</button>
+                            <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.txt" hidden>
+                            <p class="upload-formats">Supported: CSV, Excel (.xlsx, .xls), TXT</p>
+                        </div>
+
+                        <div class="file-info" id="file-info" style="display: none;">
+                            <div class="file-preview">
+                                <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                    <polyline points="13 2 13 9 20 9"/>
+                                </svg>
+                                <div class="file-details">
+                                    <p class="file-name" id="file-name">dataset.csv</p>
+                                    <p class="file-size" id="file-size">2.4 MB</p>
+                                </div>
+                                <button class="btn-icon" id="remove-file">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Section -->
+                    <div class="section">
+                        <h3 class="section-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.25m5.07 5.07l4.24 4.25M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.07-5.07l4.24-4.25"/>
+                            </svg>
+                            Data Configuration
+                        </h3>
+
+                        <div class="form-group">
+                            <label class="form-label">Data Description</label>
+                            <input type="text" class="form-input" id="description" 
+                                   placeholder="e.g., Solar power generation from 50MW plant" 
+                                   value="Solar power generation data">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Time Resolution</label>
+                                <select class="form-select" id="resolution">
+                                    <option value="10 minutes">10 minutes</option>
+                                    <option value="15 minutes">15 minutes</option>
+                                    <option value="30 minutes">30 minutes</option>
+                                    <option value="1 hour">1 hour</option>
+                                    <option value="1 day">1 day</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">System Capacity</label>
+                                <input type="text" class="form-input" id="capacity" 
+                                       placeholder="e.g., 50 MW" value="50 MW">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Analysis Goal</label>
+                            <input type="text" class="form-input" id="goal" 
+                                   placeholder="e.g., Day-ahead forecasting" 
+                                   value="Day-ahead power forecasting">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Business Objective (Optional)</label>
+                            <textarea class="form-textarea" id="business-objective" 
+                                      placeholder="e.g., Predict day-ahead generation for power market arbitrage and ancillary services participation" 
+                                      rows="3"></textarea>
+                            <p class="form-help-text" style="margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280;">Describe what business decision you want to make with this forecast. The system will provide specific recommendations in the report.</p>
+                        </div>
+                    </div>
+
+                    <!-- Custom Model Section -->
+                    <div class="section">
+                        <h3 class="section-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                            Custom Model Generator
+                            <span class="badge badge-ai">AI-Powered</span>
+                        </h3>
+
+                        <div class="toggle-wrapper">
+                            <label class="toggle">
+                                <input type="checkbox" id="enable-custom-model">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">Enable Custom Model Generation</span>
+                        </div>
+
+                        <div class="custom-model-input" id="custom-model-section" style="display: none;">
+                            <label class="form-label">Describe Your Model</label>
+                            <textarea class="form-textarea" id="model-description" 
+                                      placeholder="Example: Create a LightGBM model with 200 estimators and learning rate 0.05, add lag features for past 24 hours"
+                                      rows="4"></textarea>
+                            
+                            <div class="examples-section">
+                                <p class="examples-title">Quick Examples:</p>
+                                <div class="example-chips">
+                                    <button class="chip" data-example="lightgbm">LightGBM with tuning</button>
+                                    <button class="chip" data-example="ensemble">Stacking ensemble</button>
+                                    <button class="chip" data-example="xgboost">XGBoost optimized</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button class="btn btn-primary btn-large" id="start-analysis">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Start Analysis
+                        </button>
+                    </div>
+
+                    <!-- Status Section - MOVED TO LEFT PANEL -->
+                    <div class="section" style="margin-top: 20px;">
+                        <h3 class="section-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                            Analysis Status
+                        </h3>
+
+                        <div class="status-card" id="status-card">
+                            <div class="status-idle">
+                                <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2"/>
+                                </svg>
+                                <p>Ready to start analysis</p>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-bar" id="progress-bar" style="display: none;">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Console Logs - MOVED TO LEFT PANEL -->
+                    <div class="section" style="margin-top: 20px;">
+                        <div class="log-console" id="log-console" style="display: none;">
+                            <div class="log-header">
+                                <h4>Console Output</h4>
+                                <button class="btn-icon" id="clear-logs" title="Clear logs">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="log-content" id="log-content"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Output & Results -->
+                <div class="panel panel-right">
+                    <!-- Results Section -->
+                    <div class="section" id="results-section" style="display: none;">
+                        <h3 class="section-title" id="analysis-results-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                            Analysis Results
+                        </h3>
+
+                        <!-- Performance Metrics -->
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-label">Best Model</div>
+                                <div class="metric-value" id="best-model">Custom Model</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">R² Score</div>
+                                <div class="metric-value" id="r2-score">0.881</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">MAE</div>
+                                <div class="metric-value" id="mae-value">1.69</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">RMSE</div>
+                                <div class="metric-value" id="rmse-value">4.43</div>
+                            </div>
+                        </div>
+
+                        <!-- Model Comparison -->
+                        <div class="model-comparison">
+                            <h4 class="subsection-title">Model Performance</h4>
+                            <div class="comparison-table" id="comparison-table">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Visualizations -->
+                        <div class="visualizations">
+                            <h4 class="subsection-title">Visualizations</h4>
+                            <div class="viz-grid" id="viz-grid">
+                                <!-- Images will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Report Summary -->
+                        <div class="report-summary">
+                            <h4 class="subsection-title">Report Summary</h4>
+                            <div class="report-content" id="report-content">
+                                <p>Analysis report will appear here...</p>
+                            </div>
+                        </div>
+
+                        <!-- Business Recommendations Section (if provided) -->
+                        <div class="business-recommendations" id="business-recommendations-section" style="display: none;">
+                            <h4 class="subsection-title" style="color: #059669;">
+                                Business Recommendations
+                            </h4>
+                            <div class="business-recommendations-content" id="business-recommendations-content" 
+                                 style="background: linear-gradient(to right, #ecfdf5, #f0fdf4); padding: 20px; border-radius: 8px; border-left: 4px solid #059669;">
+                                <!-- Business recommendations will appear here -->
+                            </div>
+                        </div>
+
+                        <!-- Custom Model Code & Figure Analysis - MOVED OUT OF FEEDBACK SECTION -->
+                        <div class="custom-model-analysis" id="custom-model-analysis" style="display: none;">
+                            <h4 class="subsection-title">📊 Custom Model Code & Performance Analysis</h4>
+                            
+                            <div class="code-section">
+                                <h5 style="margin-top: 16px; margin-bottom: 8px; color: var(--primary);">Generated Code</h5>
+                                <pre id="custom-model-code" style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px;"><code></code></pre>
+                            </div>
+
+                            <div class="analysis-section" style="margin-top: 20px;">
+                                <h5 style="margin-bottom: 8px; color: var(--primary);">Figure 4: Custom Model Performance Analysis</h5>
+                                <div id="custom-model-figure" style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 12px;">
+                                    <!-- Figure 4 will be displayed here -->
+                                </div>
+                                <div id="custom-model-insights" style="background: #f0f8ff; padding: 16px; border-radius: 4px; border-left: 4px solid #0066cc;">
+                                    <!-- AI insights will be displayed here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Section for Iteration -->
+                    <div class="section" id="feedback-section" style="display: none;">
+                        <h3 class="section-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                            </svg>
+                            Iterative Improvement
+                            <span class="badge badge-interactive">Refinement</span>
+                        </h3>
+
+                        <div style="margin-bottom: 20px; padding: 12px; background: #f0f7ff; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 14px; color: #333;">
+                                <strong>💡 Ready to iterate?</strong> Based on the analysis above, provide specific improvements to refine the custom model.
+                            </p>
+                        </div>
+
+                        <div class="tuning-suggestions" id="tuning-suggestions">
+                            <!-- AI-generated suggestions will appear here -->
+                        </div>
+
+                        <div class="feedback-input">
+                            <label class="form-label">Your Improvement Request</label>
+                            <textarea class="form-textarea" id="feedback-text" 
+                                      placeholder="Example: Increase n_estimators to 250, add lag_24 feature, set learning_rate to 0.05"
+                                      rows="3"></textarea>
+                            
+                            <div class="feedback-actions">
+                                <button class="btn btn-secondary" id="skip-feedback">Accept Results</button>
+                                <button class="btn btn-primary" id="submit-feedback">
+                                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                                    </svg>
+                                    Regenerate with Feedback
+                                </button>
+                            </div>
+                            <p class="feedback-note">
+                                <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="12" y1="16" x2="12" y2="12"/>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                </svg>
+                                Max 2 iterations. Use AI suggestions above for best results.
+                            </p>
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full-Width Sections Below Grid -->
+            <!-- Forecast Section (Real Prediction) -->
+            <div class="panel" id="forecast-section" style="display: none;">
+                <h3 class="section-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M3 12h18M3 6h18M3 18h18M1 12h2M1 6h2M1 18h2M23 12h-2M23 6h-2M23 18h-2"/>
+                        <circle cx="12" cy="12" r="1"/>
+                    </svg>
+                    Real-World Prediction
+                    <span class="badge badge-feature">Production</span>
+                </h3>
+
+                <div style="margin-bottom: 20px; padding: 12px; background: #f0fdf4; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 14px; color: #333;">
+                        <strong>🔮 Generate Real Forecasts:</strong> Use the best model to predict beyond your dataset. Specify business requirements for production forecasting.
+                    </p>
+                </div>
+
+                <div class="forecast-input">
+                    <div class="form-group">
+                        <label class="form-label">Select Model</label>
+                        <select class="form-select" id="forecast-model">
+                            <option value="">-- Choose a model --</option>
+                            <!-- Options will be populated dynamically from analysis results -->
+                        </select>
+                        <p class="form-help-text">Select which model to use for generating the forecast</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Forecast Horizon</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" class="form-input" id="forecast-hours" 
+                                   placeholder="Hours ahead (e.g., 24)" value="24" min="1" max="168">
+                            <select class="form-input" id="forecast-unit" style="flex: 0.5;">
+                                <option value="hours">Hours</option>
+                                <option value="days">Days</option>
+                            </select>
+                        </div>
+                        <p class="form-help-text">Predict 1 to 7 days into the future (typical use case: next day forecast)</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Business Requirements (Optional)</label>
+                        <textarea class="form-textarea" id="forecast-requirements" 
+                                  placeholder="E.g., Predict tomorrow's power generation for day-ahead market bidding strategy"
+                                  rows="3"></textarea>
+                        <p class="form-help-text">Describe your specific business use case. This will enhance the forecast context and recommendations.</p>
+                    </div>
+
+                    <div class="forecast-actions">
+                        <button class="btn btn-primary" id="generate-forecast">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                            Generate Forecast
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Forecast Results -->
+                <div id="forecast-results" style="display: none; margin-top: 20px;">
+                    <h5 style="margin-top: 0; margin-bottom: 12px; color: var(--primary);">Forecast Output</h5>
+                    
+                    <div id="forecast-metrics" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                        <div style="background: #f0fdf4; padding: 12px; border-radius: 4px; border-left: 4px solid #22c55e;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Mean Forecast Value</div>
+                            <div style="font-size: 18px; font-weight: 600; color: #22c55e;" id="forecast-mean">0.00</div>
+                        </div>
+                        <div style="background: #fef3c7; padding: 12px; border-radius: 4px; border-left: 4px solid #f59e0b;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Confidence Interval (95%)</div>
+                            <div style="font-size: 12px; color: #b45309;" id="forecast-ci">±0.00</div>
+                        </div>
+                    </div>
+
+                    <div style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+                        <h6 style="margin-top: 0; margin-bottom: 8px; color: #333;">Forecast Values</h6>
+                        <div id="forecast-table" style="max-height: 300px; overflow-y: auto; font-size: 13px;">
+                            <!-- Forecast table will be populated here -->
+                        </div>
+                    </div>
+
+                    <div style="background: #f0f8ff; padding: 12px; border-radius: 4px; border-left: 4px solid #0066cc;">
+                        <h6 style="margin-top: 0; margin-bottom: 8px; color: #0066cc;">Business Insights</h6>
+                        <div id="forecast-insights" style="font-size: 13px; line-height: 1.6; color: #333;">
+                            <!-- Insights will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Download Section -->
+            <div class="panel" id="download-section" style="display: none;">
+                <h3 class="section-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Download Results
+                </h3>
+
+                <div class="download-grid">
+                    <button class="download-card" id="download-report">
+                        <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span>Analysis Report (.txt)</span>
+                    </button>
+                    <button class="download-card" id="download-viz">
+                        <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        <span>All Visualizations (.zip)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>PowerSys v1.0 | AI-Powered Time Series Analysis | © 2025</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
