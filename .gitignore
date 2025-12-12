@@ -50,11 +50,19 @@ Thumbs.db
 # Output files
 outputs/*.png
 outputs/*.txt
+outputs/*.zip
 checkpoints/*.pkl
+checkpoints/*.db
+checkpoints/*.db-shm
+checkpoints/*.db-wal
 
 # Large data files (consider using Git LFS)
 *.csv
+*.xlsx
+*.xls
 data/*.csv
+data/*.xlsx
+data/*.xls
 !data/tiny.csv
 
 # Logs
