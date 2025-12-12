@@ -2,6 +2,17 @@
 
 An intelligent AI-powered agent for exploratory data analysis (EDA) and time series forecasting, specifically designed for renewable energy and power system data. This system uses LangGraph workflows with LLM-powered nodes to automatically analyze data, generate insights, and build forecasting models.
 
+## 🖥️ User Interface
+
+![PowerSys Agent Interface](https://raw.githubusercontent.com/AlbertHX86/PowerSys-Time-Series-Agent-for-Power-System/main/docs/interface.png)
+
+The web interface provides an intuitive 4-step workflow:
+
+1. **Upload Data** - Drag & drop CSV, Excel, or TXT files
+2. **Configure** - Set data description, time resolution, and system capacity
+3. **Custom Model** - Optional: Describe your custom ML model in natural language
+4. **Results** - View comprehensive analysis reports and forecasts
+
 ## Features
 
 - **Automated Data Analysis**: Intelligent preprocessing, cleaning, and statistical analysis
