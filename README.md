@@ -4,13 +4,13 @@ An intelligent AI-powered agent for exploratory data analysis (EDA) and time ser
 
 ## Features
 
-- 🔍 **Automated Data Analysis**: Intelligent preprocessing, cleaning, and statistical analysis
-- 📊 **Smart Visualization**: Automatic generation of relevant plots and charts
-- 🤖 **LLM-Powered Insights**: Uses GPT models for data validation and quality assessment
-- 📈 **Time Series Forecasting**: Multiple model comparison (Random Forest, Decision Tree, Custom Models)
-- 🎯 **Custom Model Generation**: Natural language to code - describe your model and the agent generates it
-- 🔄 **Iterative Refinement**: Self-reflection and quality improvement loops
-- 🛡️ **Physical Constraints Validation**: Guardrails for renewable energy systems (non-negative power, capacity limits)
+- **Automated Data Analysis**: Intelligent preprocessing, cleaning, and statistical analysis
+- **Smart Visualization**: Automatic generation of relevant plots and charts
+- **LLM-Powered Insights**: Uses GPT models for data validation and quality assessment
+- **Time Series Forecasting**: Multiple model comparison (Random Forest, Decision Tree, Custom Models)
+- **Custom Model Generation**: Natural language to code - describe your model and the agent generates it
+- **Iterative Refinement**: Self-reflection and quality improvement loops
+- **Physical Constraints Validation**: Guardrails for renewable energy systems (non-negative power, capacity limits)
 
 ## Installation
 
